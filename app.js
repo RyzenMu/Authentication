@@ -6,6 +6,7 @@ const ejs = require('ejs');
 const mongoose = require('mongoose');
 const encrypt = require('mongoose-encryption');
 const md5 = require('md5');
+const bcrypt = require('bcryptjs');
 
 
 const app = express();
@@ -44,9 +45,11 @@ app.get('/register', function(req, res){
 });
 
 app.post('/register', async function(req, res) {
+    const salt = bcrypt.genSaltSync(10);
+    const hash = bcrypt.hashSync(req.body.password)
     const newUser = new User({
         email: req.body.username,
-        password: md5(req.body.password)
+        password: hash
     });
 
     try {
@@ -60,13 +63,14 @@ app.post('/register', async function(req, res) {
 
 app.post("/login", async function(req, res) {
     const username = req.body.username;
-    const password = md5(req.body.password);
+    const password = req.body.password;
 
     try {
         const foundUser = await User.findOne({ email: username });
         
         if (foundUser) {
-            if (foundUser.password === password) {
+            // if (foundUser.password === password) {
+            if (bcrypt.compareSync(password,foundUser.password)){
                 res.render('secrets');
             } else {
                 res.send('Incorrect password.');
