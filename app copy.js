@@ -7,9 +7,6 @@ const mongoose = require('mongoose');
 const encrypt = require('mongoose-encryption');
 const md5 = require('md5');
 const bcrypt = require('bcryptjs');
-const session = require('express-session');
-const passport = require('passport');
-const passportLocalMongoose = require('passport-local-mongoose');
 
 
 const app = express();
@@ -17,13 +14,6 @@ const app = express();
 app.use(express.static("public"));
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({extended:true}));
-app.use(session({
-    secret: 'Our little secret.',
-    resave: false,
-    saveUninitialized: false
-}));
-app.use(passport.initialize());
-app.use(passport.session());
 
 // mongoose connection
 mongoose.connect('mongodb+srv://creativeblaster14:ejzS3i8XBNWKcg24@cluster0.0ep1y.mongodb.net/Auth?retryWrites=true&w=majority&appName=Cluster0/', {useNewUrlParser:true});
@@ -33,9 +23,6 @@ const userSchema = new mongoose.Schema({
     password: String
 });
 
-//passport plugin
-userSchema.plugin(passportLocalMongoose);
-
 //Environment Variables
 console.log(process.env.API_KEY);
 console.log(process.env.SECRET);
@@ -44,10 +31,6 @@ const secret = process.env.SECRET;
 // userSchema.plugin(encrypt, {secret:secret, encryptedFields: ['password']});
 
 const User = new mongoose.model("simple_password", userSchema);
-
-passport.use(User.createStrategy());
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser);
 
 app.get('/', function(req, res){
     res.render("home");
@@ -62,12 +45,43 @@ app.get('/register', function(req, res){
 });
 
 app.post('/register', async function(req, res) {
-   
+    const salt = bcrypt.genSaltSync(10);
+    const hash = bcrypt.hashSync(req.body.password)
+    const newUser = new User({
+        email: req.body.username,
+        password: hash
+    });
+
+    try {
+        await newUser.save(); // Using Promise with async/await
+        res.render("secrets"); // Make sure 'res' is used, not 'req'
+    } catch (err) {
+        console.log(err);
+        res.status(500).send("An error occurred while registering the user.");
+    }
 });
 
 app.post("/login", async function(req, res) {
-    
-  
+    const username = req.body.username;
+    const password = req.body.password;
+
+    try {
+        const foundUser = await User.findOne({ email: username });
+        
+        if (foundUser) {
+            // if (foundUser.password === password) {
+            if (bcrypt.compareSync(password,foundUser.password)){
+                res.render('secrets');
+            } else {
+                res.send('Incorrect password.');
+            }
+        } else {
+            res.send('No user found with that email.');
+        }
+    } catch (err) {
+        console.log(err);
+        res.status(500).send("An error occurred while logging in.");
+    }
 });
 
 
