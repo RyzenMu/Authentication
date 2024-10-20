@@ -22,8 +22,17 @@ app.use(session({
     resave: false,
     saveUninitialized: false
 }));
+app.use(session({
+    secret: 'Our little secret.',
+    resave: false, // Don't resave session if unmodified
+    saveUninitialized: false, // Don't create session until something is stored
+}));
+
 app.use(passport.initialize());
+app.use(require('morgan')('combined'));
+
 app.use(passport.session());
+
 
 // mongoose connection
 mongoose.connect('mongodb+srv://creativeblaster14:ejzS3i8XBNWKcg24@cluster0.0ep1y.mongodb.net/Auth?retryWrites=true&w=majority&appName=Cluster0/', {useNewUrlParser:true});
@@ -32,9 +41,10 @@ const userSchema = new mongoose.Schema({
     email: String,
     password: String
 });
-
-//passport plugin
 userSchema.plugin(passportLocalMongoose);
+
+const User = new mongoose.model("User", userSchema);
+
 
 //Environment Variables
 console.log(process.env.API_KEY);
@@ -43,11 +53,12 @@ const secret = process.env.SECRET;
 
 // userSchema.plugin(encrypt, {secret:secret, encryptedFields: ['password']});
 
-const User = new mongoose.model("simple_password", userSchema);
+// const User = new mongoose.model("simple_password", userSchema);
 
 passport.use(User.createStrategy());
 passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser);
+passport.deserializeUser(User.deserializeUser());
+
 
 app.get('/', function(req, res){
     res.render("home");
@@ -61,32 +72,68 @@ app.get('/register', function(req, res){
     res.render("register");
 });
 
-app.get('/secrets', function(req, res){
-    if(req.isAuthenticated()){
+app.get('/secrets', function(req, res) {
+    console.log("Authenticated?", req.isAuthenticated()); // Check if authenticated
+    if(req.isAuthenticated()) {
         res.render('secrets');
     } else {
-        res.render('login');
+        res.redirect('/login');  // Changed to redirect to avoid rendering the login page
     }
-})
+});
 
-app.post('/register', async function(req, res) {
-   User.register({username:req.body.username
-}, req.body.password, function(err, user){
+
+app.post('/register', function(req, res) {
+    console.log("Register request received");
+
+    User.register({username: req.body.username}, req.body.password, function(err, user){
+        if (err){
+            console.log("Error during registration:", err);
+            res.redirect('/register');
+        } else {
+            console.log("User registered successfully:", user);
+
+            req.login(user, function(err) { // Manually log in the user
+                if (err) {
+                    console.log("Login error after registration:", err);  // Log any login error
+                    res.redirect('/login'); 
+                } else {
+                    console.log("User logged in successfully.");
+                    res.redirect('/secrets');
+                }
+            });
+        }
+    });
+});
+
+
+
+app.post("/login", async function(req, res) {
+    
+  const user = new User({
+    username:req.body.username,
+    password:req.body.password
+  })
+
+  req.login(user, function(err){
     if (err){
-        console.log(err);
-        res.redirect('/register');        
+        console.log(err);        
     } else {
         passport.authenticate("local") (req, res, function(){
             res.redirect('/secrets');
         })
     }
-})
+  })
 });
 
-app.post("/login", async function(req, res) {
-    
-  
+app.get('/logout', function(req, res, next) {
+    req.logout(function(err) {  // Provide a callback function
+        if (err) { 
+            return next(err);  // Handle any potential errors
+        }
+        res.redirect('/');  // On successful logout, redirect to the home page
+    });
 });
+
 
 
 
