@@ -89,7 +89,7 @@ app.get("/register", function (req, res) {
 });
 
 app.get("/secrets", function (req, res) {
-  console.log("Authenticated?", req.isAuthenticated()); // Check if authenticated
+  console.log("Authenticated?..", req.isAuthenticated()); // Check if authenticated
   if (req.isAuthenticated()) {
     res.render("secrets");
   } else {
