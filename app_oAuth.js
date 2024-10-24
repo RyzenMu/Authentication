@@ -98,7 +98,7 @@ app.get("/secrets", function (req, res) {
 });
 
 app.post("/register", function (req, res) {
-  console.log("Register request received");
+  console.log("Register request received...");
 
   User.register(
     { username: req.body.username },
