@@ -15,6 +15,15 @@ const findOrCreate = require('mongoose-findorcreate');
 
 const app = express();
 
+app.use(
+  session({
+    secret: "Our little secret.",
+    resave: false,
+    saveUninitialized: false,
+  })
+);
+
+
 app.use(express.static("public"));
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -44,9 +53,12 @@ mongoose.connect(
   { useNewUrlParser: true }
 );
 
+
+
 const userSchema = new mongoose.Schema({
   email: String,
   password: String,
+  googleId: String
 });
 userSchema.plugin(passportLocalMongoose);
 userSchema.plugin(findOrCreate);
@@ -63,8 +75,19 @@ const secret = process.env.SECRET;
 // const User = new mongoose.model("simple_password", userSchema);
 
 passport.use(User.createStrategy());
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+// passport.serializeUser(User.serializeUser());
+// passport.deserializeUser(User.deserializeUser());
+
+passport.serializeUser(function(user, done ){
+  done(null, user.id);
+});
+
+passport.deserializeUser(function(id, done){
+  User.findById(id, function(err, user){
+    done(err, user);
+  });
+});
+
 
 passport.use(new GoogleStrategy({
   clientID: process.env.CLIENT_ID,
@@ -78,9 +101,24 @@ function(accessToken, refreshToken, profile, cb) {
 }
 ));
 
+
+User.deleteMany({ username: null });
+
+
 app.get("/", function (req, res) {
   res.render("home");
 });
+
+app.get("/auth/google", passport.authenticate("google", { scope: ["profile"] }));
+
+
+app.get('/auth/google/secrets', 
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  function(req, res) {
+    // Successful authentication, redirect secrets.
+    res.redirect('/secrets');
+  });
+
 
 app.get("/login", function (req, res) {
   res.render("login");
@@ -99,8 +137,39 @@ app.get("/secrets", function (req, res) {
   }
 });
 
+// app.post("/register", function (req, res) {
+//   console.log("Register request received...");
+
+//   User.register(
+//     { username: req.body.username },
+//     req.body.password,
+//     function (err, user) {
+//       if (err) {
+//         console.log("Error during registration:", err);
+//         res.redirect("/register");
+//       } else {
+//         console.log("User registered successfully:", user);
+
+//         req.login(user, function (err) {
+//           // Manually log in the user
+//           if (err) {
+//             console.log("Login error after registration:", err); // Log any login error
+//             res.redirect("/login");
+//           } else {
+//             console.log("User logged in successfully.");
+//             res.redirect("/secrets");
+//           }
+//         });
+//       }
+//     }
+//   );
+// });
+
 app.post("/register", function (req, res) {
-  console.log("Register request received...");
+  if (!req.body.username || !req.body.password) {
+    console.log("Username or password is missing.");
+    return res.redirect("/register");
+  }
 
   User.register(
     { username: req.body.username },
@@ -110,15 +179,11 @@ app.post("/register", function (req, res) {
         console.log("Error during registration:", err);
         res.redirect("/register");
       } else {
-        console.log("User registered successfully:", user);
-
         req.login(user, function (err) {
-          // Manually log in the user
           if (err) {
-            console.log("Login error after registration:", err); // Log any login error
+            console.log("Login error after registration:", err);
             res.redirect("/login");
           } else {
-            console.log("User logged in successfully.");
             res.redirect("/secrets");
           }
         });
@@ -126,6 +191,7 @@ app.post("/register", function (req, res) {
     }
   );
 });
+
 
 app.post("/login", async function (req, res) {
   const user = new User({
